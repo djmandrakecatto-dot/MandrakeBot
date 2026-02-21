@@ -1,0 +1,11 @@
+aiohttp
+discord.py
+mido
+moviepy
+numpy
+opencv_python
+Pillow
+psutil
+pyautogui
+pygltflib
+pyttsx3
