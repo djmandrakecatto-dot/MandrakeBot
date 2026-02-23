@@ -14,7 +14,55 @@ def get_token():
     except FileNotFoundError:
         print("❌ Error: secrets.txt not found!")
         return None
+async def console_listener():
+    await bot.wait_until_ready()
+    print("💻 Console ready. Type commands below.")
 
+    while not bot.is_closed():
+        try:
+            cmd = await asyncio.to_thread(input, "CMD> ")
+
+            if cmd.startswith("sendmessageser "):
+                parts = cmd.split(" ", 2)
+                if len(parts) < 3:
+                    print("Usage: sendmessageser [channel_id] [text]")
+                    continue
+
+                try:
+                    channel_id = int(parts[1])
+                except ValueError:
+                    print("❌ Channel ID must be a number.")
+                    continue
+
+                message = parts[2]
+
+                channel = bot.get_channel(channel_id)
+                if channel is None:
+                    try:
+                        channel = await bot.fetch_channel(channel_id)
+                    except Exception:
+                        print("❌ Invalid channel or no access.")
+                        continue
+
+                try:
+                    await channel.send(message)
+                    print(f"✅ Message sent to {channel_id}")
+                except Exception as e:
+                    print(f"❌ Failed to send message: {e}")
+
+            elif cmd == "reload":
+                print("🔄 Reloading cogs...")
+                await load_cogs()
+
+            elif cmd == "exit":
+                print("🛑 Shutting down...")
+                await bot.close()
+
+            else:
+                print("Unknown command.")
+
+        except Exception as e:
+            print(f"Console error: {e}")
 # --- RESOURCE GUARD LOGIC ---
 MEMORY_THRESHOLD = 95.5 # Percent
 
@@ -79,30 +127,55 @@ async def on_message(message):
     if not is_system_safe():
         return 
     await bot.process_commands(message)
-
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
     print(f"🛡️ Resource Guard: {MEMORY_THRESHOLD}% | Queue: Active")
 
+    bot.loop.create_task(console_listener())
 # --- HYBRID HELP COMMAND ---
 @bot.hybrid_command(name="help", description="List all available commands")
 async def help(ctx):
     """Works for both !help and /help"""
+
+    embeds = []
     embed = discord.Embed(
-        title="🤖 Mandrake Bot - Hybrid Help", 
+        title="🤖 Mandrake Bot - Hybrid Help",
         color=discord.Color.from_rgb(255, 69, 0),
         description="I support both `!` prefix and `/` Slash Commands!"
     )
-    
+
+    field_count = 0
+
     for cog_name, cog in bot.cogs.items():
-        # Includes both normal and hybrid commands
         cmd_list = [f"`{c.name}`" for c in cog.get_commands()]
-        if cmd_list:
-            embed.add_field(name=f"📦 {cog_name}", value=", ".join(cmd_list), inline=False)
-            
-    embed.set_footer(text="Constraint: 10s Anti-Spam | Auto-Pause at 95.5% RAM")
-    await ctx.send(embed=embed)
+        if not cmd_list:
+            continue
+
+        # If we reach 25 fields, create a new embed
+        if field_count >= 25:
+            embeds.append(embed)
+            embed = discord.Embed(
+                title="🤖 Mandrake Bot - Hybrid Help (Continued)",
+                color=discord.Color.from_rgb(255, 69, 0)
+            )
+            field_count = 0
+
+        embed.add_field(
+            name=f"📦 {cog_name}",
+            value=", ".join(cmd_list),
+            inline=False
+        )
+        field_count += 1
+
+    embeds.append(embed)
+
+    # Send first embed normally
+    if len(embeds) == 1:
+        await ctx.send(embed=embeds[0])
+    else:
+        for e in embeds:
+            await ctx.send(embed=e)
 
 # --- COG LOADER ---
 async def load_cogs():
